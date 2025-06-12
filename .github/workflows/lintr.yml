@@ -16,9 +16,9 @@ jobs:
     name: Run lintr scanning
     runs-on: ubuntu-latest
     permissions:
-      contents: read # for checkout to fetch code
-      security-events: write # for github/codeql-action/upload-sarif to upload SARIF results
-      actions: read # only required for a private repository by github/codeql-action/upload-sarif to get the Action run status
+      contents: read
+      security-events: write
+      actions: read
 
     steps:
       - name: Checkout code
@@ -27,7 +27,7 @@ jobs:
       - name: Cache R library dependencies
         uses: actions/cache@v4
         with:
-          path: ~/.cache/R  # Cache the installed R libraries to speed up future runs
+          path: ~/.cache/R
           key: ${{ runner.os }}-r-libraries-${{ hashFiles('**/DESCRIPTION') }}
           restore-keys: |
             ${{ runner.os }}-r-libraries-
@@ -37,37 +37,46 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y r-base
 
-      - name: Install lintr and jsonlite package and dependencies
+      - name: Install lintr and dependencies
         run: |
-          # Ensure that the installation path is writable
           R_LIBS_USER="${HOME}/.local/lib/R/site-library"
           mkdir -p "${R_LIBS_USER}"
-          
-          # Set the R_LIBS_USER environment variable and install lintr and jsonlite
           R -e "install.packages(c('lintr', 'jsonlite'), lib = '${R_LIBS_USER}')"
-          
-          # Additional dependencies can be added here
-          # R -e "install.packages('other-package', lib = '${R_LIBS_USER}')"
 
       - name: Run lintr and filter results
         run: |
-          # Ensure the lintr package is available
           R_LIBS_USER="${HOME}/.local/lib/R/site-library" R -e "
-            # List all directories where R code exists
             dirs <- c('R', 'inst', 'man-roxygen', 'res', 'smoketests', 'tests', 'tools')
-            
-            # Run lintr across all specified directories
-            results <- lintr::lint_dir(dirs)
-            
-            # Filter out any results with invalid 'startColumn' (less than 1)
-            results <- results[!sapply(results, function(x) any(sapply(x$locations, function(l) l$physicalLocation$region$startColumn < 1)))]
-            
-            # Generate SARIF report with valid results
-            lintr::sarif_output(results, 'lintr-results.sarif')
+
+            all_results <- unlist(lapply(dirs, function(dir) {
+              if (dir.exists(dir)) lintr::lint_dir(dir) else list()
+            }), recursive = FALSE)
+
+            valid_results <- all_results[!sapply(all_results, function(x) {
+              any(sapply(x$locations, function(l) {
+                is.null(l$physicalLocation$region$startColumn) || l$physicalLocation$region$startColumn < 1
+              }))
+            })]
+
+            if (length(valid_results) > 0) {
+              lintr::sarif_output(valid_results, 'lintr-results.sarif')
+            } else {
+              cat('No valid lint results to report.\n')
+            }
           "
         continue-on-error: true
 
+      - name: Check if SARIF file exists
+        id: sarif_check
+        run: |
+          if [ -f lintr-results.sarif ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Upload analysis results to GitHub
+        if: steps.sarif_check.outputs.exists == 'true'
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: lintr-results.sarif

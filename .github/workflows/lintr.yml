@@ -37,7 +37,7 @@ jobs:
       - name: Cache R library dependencies
         uses: actions/cache@v4
         with:
-          path: ~/.cache/R  # Adjust the path as needed based on your system
+          path: ~/.cache/R  # Cache the installed R libraries to speed up future runs
           key: ${{ runner.os }}-r-libraries-${{ hashFiles('**/DESCRIPTION') }}
           restore-keys: |
             ${{ runner.os }}-r-libraries-
@@ -49,13 +49,20 @@ jobs:
 
       - name: Install lintr package and dependencies
         run: |
-          R -e "install.packages('lintr')"
-          # You can also install other dependencies if needed
-          # R -e "install.packages('other-package')"
+          # Ensure that the installation path is writable
+          R_LIBS_USER="${HOME}/.local/lib/R/site-library"
+          mkdir -p "${R_LIBS_USER}"
+          
+          # Set the R_LIBS_USER environment variable and install lintr
+          R -e "install.packages('lintr', lib = '${R_LIBS_USER}')"
+          
+          # Additional dependencies can be added here
+          # R -e "install.packages('other-package', lib = '${R_LIBS_USER}')"
 
       - name: Run lintr
         run: |
-          R -e "lintr::sarif_output(lintr::lint_dir('.'), 'lintr-results.sarif')"
+          # Ensure the lintr package is available and run the analysis
+          R_LIBS_USER="${HOME}/.local/lib/R/site-library" R -e "lintr::sarif_output(lintr::lint_dir('.'), 'lintr-results.sarif')"
         continue-on-error: true
 
       - name: Upload analysis results to GitHub
@@ -63,4 +70,5 @@ jobs:
         with:
           sarif_file: lintr-results.sarif
           wait-for-processing: true
+
 

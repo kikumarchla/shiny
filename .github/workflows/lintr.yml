@@ -54,7 +54,7 @@ jobs:
           mkdir -p "${R_LIBS_USER}"
           
           # Set the R_LIBS_USER environment variable and install lintr
-          R -e "install.packages('lintr', lib = '${R_LIBS_USER}')"
+          R -e "install.packages(c('lintr', 'jsonlite'), lib = '${R_LIBS_USER}')"
           
           # Additional dependencies can be added here
           # R -e "install.packages('other-package', lib = '${R_LIBS_USER}')"

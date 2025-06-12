@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [ "main" ]
   schedule:
-    - cron: '23 3 * * 2'
+    - cron: '23 3 * * 2'  # Every Tuesday at 03:23 UTC
 
 permissions:
   contents: read
@@ -53,8 +53,9 @@ jobs:
             }), recursive = FALSE)
 
             valid_results <- all_results[!sapply(all_results, function(x) {
-              any(sapply(x$locations, function(l) {
-                is.null(l$physicalLocation$region$startColumn) || l$physicalLocation$region$startColumn < 1
+              any(sapply(x$locations, function(loc) {
+                is.null(loc$physicalLocation$region$startColumn) ||
+                loc$physicalLocation$region$startColumn < 1
               }))
             })]
 

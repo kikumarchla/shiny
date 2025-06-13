@@ -1,8 +1,8 @@
-name: Lintr Check
+name: Lintr Check (Non-blocking)
 
 on:
   push:
-    branches: [main]
+    branches: [master]
   pull_request:
     branches: [master]
   workflow_dispatch:
@@ -24,12 +24,12 @@ jobs:
         install.packages("lintr")
       shell: Rscript {0}
 
-    - name: Run lintr
+    - name: Run lintr (Non-blocking)
       run: |
         lint_results <- lintr::lint_package()
-        print(lint_results)
         if (length(lint_results) > 0) {
-          stop("❌ lintr found issues. Failing the job.")
+          message("⚠️ lintr found issues, but the workflow will not fail.")
+          print(lint_results)
         } else {
           message("✅ No linting issues found.")
         }

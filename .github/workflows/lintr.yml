@@ -20,26 +20,30 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install R
+      - name: Set up R
         run: |
           sudo apt-get update
           sudo apt-get install -y r-base
 
-      - name: Install lintr
+      - name: Set R library path
         run: |
-          R_LIBS_USER="${HOME}/.local/lib/R/site-library"
-          mkdir -p "${R_LIBS_USER}"
-          R -e "install.packages('remotes', repos = 'https://cloud.r-project.org'); remotes::install_github('r-lib/lintr')"
+          echo "R_LIBS_USER=${HOME}/.local/lib/R/site-library" >> $GITHUB_ENV
+          mkdir -p "${HOME}/.local/lib/R/site-library"
+
+      - name: Install lintr and dependencies
+        run: |
+          Rscript -e "install.packages('remotes', repos = 'https://cloud.r-project.org', lib = Sys.getenv('R_LIBS_USER'))"
+          Rscript -e "remotes::install_github('r-lib/lintr', lib = Sys.getenv('R_LIBS_USER'))"
 
       - name: Run lintr and generate SARIF
         run: |
-          R_LIBS_USER="${HOME}/.local/lib/R/site-library" Rscript -e "
+          Rscript -e "
             dirs <- c('R', 'inst', 'man', 'tests', 'tools')
             lints <- unlist(lapply(dirs, function(d) if (dir.exists(d)) lintr::lint_dir(d) else list()), recursive = FALSE)
             if (length(lints) > 0) {
               lintr::sarif_output(lints, 'lintr.sarif', pkg_path = '.')
             } else {
-              cat('No lint issues found.\n')
+              cat('No lint issues found.\\n')
             }
           "
         continue-on-error: true

@@ -41,7 +41,7 @@ jobs:
         run: |
           R_LIBS_USER="${HOME}/.local/lib/R/site-library"
           mkdir -p "${R_LIBS_USER}"
-          R -e "install.packages(c('lintr', 'jsonlite'), lib = '${R_LIBS_USER}')"
+          R -e "install.packages('remotes', lib = '${R_LIBS_USER}'); remotes::install_github('r-lib/lintr', lib = '${R_LIBS_USER}'); install.packages('jsonlite', lib = '${R_LIBS_USER}')"
 
       - name: Run lintr and generate SARIF report
         id: lintr_sarif

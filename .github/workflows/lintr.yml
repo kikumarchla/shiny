@@ -1,55 +1,59 @@
-name: R lintr
+name: "lintr"
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [master]
   pull_request:
-    branches: [ "main" ]
-
-permissions:
-  contents: read
+    branches: [master]
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly scan
 
 jobs:
-  lintr:
-    name: Run lintr
+  analyze:
+    name: CodeQL Analysis + R lintr
     runs-on: ubuntu-latest
+
     permissions:
+      actions: read
+      contents: read
       security-events: write
 
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'cpp', 'python' ]  # Add other supported CodeQL languages here
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Set up R
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y r-base
+    # Set up CodeQL
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: ${{ matrix.language }}
 
-      - name: Set R library path
-        run: |
-          echo "R_LIBS_USER=${HOME}/.local/lib/R/site-library" >> $GITHUB_ENV
-          mkdir -p "${HOME}/.local/lib/R/site-library"
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v3
 
-      - name: Install lintr and dependencies
-        run: |
-          Rscript -e "install.packages('remotes', repos = 'https://cloud.r-project.org', lib = Sys.getenv('R_LIBS_USER'))"
-          Rscript -e "remotes::install_github('r-lib/lintr', lib = Sys.getenv('R_LIBS_USER'))"
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
 
-      - name: Run lintr and generate SARIF
-        run: |
-          Rscript -e "
-            dirs <- c('R', 'inst', 'man', 'tests', 'tools')
-            lints <- unlist(lapply(dirs, function(d) if (dir.exists(d)) lintr::lint_dir(d) else list()), recursive = FALSE)
-            if (length(lints) > 0) {
-              lintr::sarif_output(lints, 'lintr.sarif', pkg_path = '.')
-            } else {
-              cat('No lint issues found.\\n')
-            }
-          "
-        continue-on-error: true
+    # --- Start of lintr integration ---
+    - name: Setup R
+      uses: r-lib/actions/setup-r@v2
 
-      - name: Upload SARIF report
-        if: always()
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: lintr.sarif
+    - name: Install lintr
+      run: |
+        install.packages("lintr")
+      shell: Rscript {0}
+
+    - name: Run lintr
+      run: |
+        lint_results <- lintr::lint_dir(config = ".lintr.yaml")
+        print(lint_results)
+        if (length(lint_results) > 0) {
+          stop("lintr found issues. Failing the job.")
+        }
+      shell: Rscript {0}
+    # --- End of lintr integration ---

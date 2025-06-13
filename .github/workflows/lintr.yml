@@ -44,6 +44,7 @@ jobs:
           R -e "install.packages(c('lintr', 'jsonlite'), lib = '${R_LIBS_USER}')"
 
       - name: Run lintr and generate SARIF report
+        id: lintr_sarif
         run: |
           R_LIBS_USER="${HOME}/.local/lib/R/site-library" R -e "
             dirs <- c('R', 'inst', 'man-roxygen', 'res', 'smoketests', 'tests', 'tools')
@@ -51,9 +52,13 @@ jobs:
               if (dir.exists(dir)) lintr::lint_dir(dir) else list()
             }), recursive = FALSE)
 
-            # If there are any lint results, output them to SARIF format
+            # Create a temporary file path for SARIF output
+            temp_sarif_path <- tempfile('lintr-results', fileext = '.sarif')
+
+            # If there are any lint results, output them to the temporary SARIF file
             if (length(all_results) > 0) {
-              lintr::sarif_output(all_results, 'lintr-results.sarif')
+              lintr::sarif_output(all_results, temp_sarif_path)
+              cat('SARIF report generated at:', temp_sarif_path, '\n')
             } else {
               cat('No lint results to report.\n')
             }
@@ -63,7 +68,8 @@ jobs:
       - name: Check if SARIF file exists
         id: sarif_check
         run: |
-          if [ -f lintr-results.sarif ]; then
+          # Check if SARIF file was created in the temporary location
+          if [ -f "${{ steps.lintr_sarif.outputs.temp_sarif_path }}" ]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
@@ -73,5 +79,5 @@ jobs:
         if: steps.sarif_check.outputs.exists == 'true'
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: lintr-results.sarif
+          sarif_file: ${{ steps.lintr_sarif.outputs.temp_sarif_path }}
           wait-for-processing: true

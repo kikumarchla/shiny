@@ -43,26 +43,19 @@ jobs:
           mkdir -p "${R_LIBS_USER}"
           R -e "install.packages(c('lintr', 'jsonlite'), lib = '${R_LIBS_USER}')"
 
-      - name: Run lintr and filter results
+      - name: Run lintr and generate SARIF report
         run: |
           R_LIBS_USER="${HOME}/.local/lib/R/site-library" R -e "
             dirs <- c('R', 'inst', 'man-roxygen', 'res', 'smoketests', 'tests', 'tools')
-
             all_results <- unlist(lapply(dirs, function(dir) {
               if (dir.exists(dir)) lintr::lint_dir(dir) else list()
             }), recursive = FALSE)
 
-            valid_results <- all_results[!sapply(all_results, function(x) {
-              any(sapply(x$locations, function(loc) {
-                is.null(loc$physicalLocation$region$startColumn) ||
-                loc$physicalLocation$region$startColumn < 1
-              }))
-            })]
-
-            if (length(valid_results) > 0) {
-              lintr::sarif_output(valid_results, 'lintr-results.sarif')
+            # If there are any lint results, output them to SARIF format
+            if (length(all_results) > 0) {
+              lintr::sarif_output(all_results, 'lintr-results.sarif')
             } else {
-              cat('No valid lint results to report.\n')
+              cat('No lint results to report.\n')
             }
           "
         continue-on-error: true
@@ -76,7 +69,7 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Upload analysis results to GitHub
+      - name: Upload analysis results to GitHub (if SARIF file exists)
         if: steps.sarif_check.outputs.exists == 'true'
         uses: github/codeql-action/upload-sarif@v3
         with:

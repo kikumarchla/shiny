@@ -47,18 +47,24 @@ jobs:
         id: lintr_sarif
         run: |
           R_LIBS_USER="${HOME}/.local/lib/R/site-library" R -e "
+            # Set the directories to lint
             dirs <- c('R', 'inst', 'man-roxygen', 'res', 'smoketests', 'tests', 'tools')
+
+            # Lint all the directories and gather results
             all_results <- unlist(lapply(dirs, function(dir) {
               if (dir.exists(dir)) lintr::lint_dir(dir) else list()
             }), recursive = FALSE)
 
-            # Create a temporary file path for SARIF output
-            temp_sarif_path <- tempfile('lintr-results', fileext = '.sarif')
+            # Print current working directory (for debugging)
+            cat('Current working directory:', getwd(), '\n')
 
-            # If there are any lint results, output them to the temporary SARIF file
+            # Create a relative path for SARIF output
+            sarif_file_path <- 'lintr-results.sarif'
+
+            # If there are any lint results, output them to the relative SARIF file
             if (length(all_results) > 0) {
-              lintr::sarif_output(all_results, temp_sarif_path)
-              cat('SARIF report generated at:', temp_sarif_path, '\n')
+              lintr::sarif_output(all_results, sarif_file_path)
+              cat('SARIF report generated at:', sarif_file_path, '\n')
             } else {
               cat('No lint results to report.\n')
             }
@@ -68,8 +74,8 @@ jobs:
       - name: Check if SARIF file exists
         id: sarif_check
         run: |
-          # Check if SARIF file was created in the temporary location
-          if [ -f "${{ steps.lintr_sarif.outputs.temp_sarif_path }}" ]; then
+          # Check if SARIF file was created in the current working directory
+          if [ -f "lintr-results.sarif" ]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
@@ -79,5 +85,5 @@ jobs:
         if: steps.sarif_check.outputs.exists == 'true'
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: ${{ steps.lintr_sarif.outputs.temp_sarif_path }}
+          sarif_file: lintr-results.sarif
           wait-for-processing: true

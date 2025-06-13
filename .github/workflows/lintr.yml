@@ -1,81 +1,51 @@
-name: lintr
+name: R lintr
 
 on:
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
-  schedule:
-    - cron: '23 3 * * 2'  # Every Tuesday at 03:23 UTC
 
 permissions:
   contents: read
 
 jobs:
   lintr:
-    name: Run lintr scanning
+    name: Run lintr
     runs-on: ubuntu-latest
     permissions:
-      contents: read
       security-events: write
-      actions: read
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Cache R library dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/R
-          key: ${{ runner.os }}-r-libraries-${{ hashFiles('**/DESCRIPTION') }}
-          restore-keys: |
-            ${{ runner.os }}-r-libraries-
 
       - name: Install R
         run: |
           sudo apt-get update
           sudo apt-get install -y r-base
 
-      - name: Install lintr and dependencies
+      - name: Install lintr
         run: |
           R_LIBS_USER="${HOME}/.local/lib/R/site-library"
           mkdir -p "${R_LIBS_USER}"
-          R -e "install.packages('remotes', lib = '${R_LIBS_USER}'); remotes::install_github('r-lib/lintr', lib = '${R_LIBS_USER}'); install.packages('jsonlite', lib = '${R_LIBS_USER}')"
+          R -e "install.packages('remotes', repos = 'https://cloud.r-project.org'); remotes::install_github('r-lib/lintr')"
 
-      - name: Run lintr and generate SARIF report
-        id: lintr_sarif
+      - name: Run lintr and generate SARIF
         run: |
-          R_LIBS_USER="${HOME}/.local/lib/R/site-library" R -e "
-            dirs <- c('R', 'inst', 'man-roxygen', 'res', 'smoketests', 'tests', 'tools')
-            all_results <- unlist(lapply(dirs, function(dir) {
-              if (dir.exists(dir)) lintr::lint_dir(dir) else list()
-            }), recursive = FALSE)
-
-            cat('Current working directory:', getwd(), '\n')
-            sarif_file_path <- 'lintr-results.sarif'
-
-            if (length(all_results) > 0) {
-              lintr::sarif_output(all_results, sarif_file_path, pkg_path = '.')
-              cat('SARIF report generated at:', sarif_file_path, '\n')
+          R_LIBS_USER="${HOME}/.local/lib/R/site-library" Rscript -e "
+            dirs <- c('R', 'inst', 'man', 'tests', 'tools')
+            lints <- unlist(lapply(dirs, function(d) if (dir.exists(d)) lintr::lint_dir(d) else list()), recursive = FALSE)
+            if (length(lints) > 0) {
+              lintr::sarif_output(lints, 'lintr.sarif', pkg_path = '.')
             } else {
-              cat('No lint results to report.\n')
+              cat('No lint issues found.\n')
             }
           "
         continue-on-error: true
 
-      - name: Check if SARIF file exists
-        id: sarif_check
-        run: |
-          if [ -f "lintr-results.sarif" ]; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Upload analysis results to GitHub (if SARIF file exists)
-        if: steps.sarif_check.outputs.exists == 'true'
+      - name: Upload SARIF report
+        if: always()
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: lintr-results.sarif
-          wait-for-processing: true
+          sarif_file: lintr.sarif

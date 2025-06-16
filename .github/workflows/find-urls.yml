@@ -1,0 +1,33 @@
+name: Find URLs in Code
+ 
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+ 
+jobs:
+  find-urls:
+    runs-on: ubuntu-latest
+ 
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+ 
+    - name: Create temp directory
+      run: mkdir temp
+ 
+    - name: Search for URLs with filenames
+      run: |
+        echo "Scanning for URLs..."
+        echo "=== HTTP/HTTPS URLs ===" > temp/urls_with_files.txt
+        grep -rEn "(http|https)://[^\s\"']+" . --exclude-dir=temp | tee -a temp/urls_with_files.txt
+ 
+        echo -e "\n=== URLs in curl commands ===" >> temp/urls_with_files.txt
+        grep -rEn "curl\s+['\"]?(http[s]?://[^'\" \t\n]+)" . --exclude-dir=temp | tee -a temp/urls_with_files.txt
+ 
+    - name: Show found URLs with source files
+      run: |
+        echo "Found URLs and source files:"
+        cat temp/urls_with_files.txt
